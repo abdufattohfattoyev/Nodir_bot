@@ -1,0 +1,2 @@
+# Nodir_bot
+NODIR AKA UCHUN MAXSUS 
