@@ -58,3 +58,18 @@ class KinoDatabase(Database):
         sql = "SELECT count_download FROM Kino WHERE post_id = ?"
         result = self.execute(sql, parameters=(post_id,), fetchone=True)
         return result[0] if result else 0
+
+    def get_all_kinos(self):
+        sql = "SELECT post_id, file_id, caption FROM Kino"
+        results = self.execute(sql, fetchall=True)
+
+        # Natijani formatlash
+        kinolar = []
+        for result in results:
+            kinolar.append({
+                "post_id": result[0],
+                "file_id": result[1],
+                "caption": result[2]
+            })
+
+        return kinolar

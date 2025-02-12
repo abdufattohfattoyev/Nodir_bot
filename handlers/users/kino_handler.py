@@ -7,7 +7,7 @@ from handlers.users.reklama import ReklamaTuriState
 from loader import dp, bot, kino_db, user_db
 from keyboards.default.button_kino import menu_movie
 import asyncio
-
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram import types
 from aiogram.dispatcher.filters import Command
 from keyboards.default.admin_menu import admin_menu
@@ -228,6 +228,94 @@ async def cancel_handler(message: types.Message, state: FSMContext):
     else:
         await message.answer("Jarayon bekor qilindi. Siz Admin menyudasiz.",
                              reply_markup=ReplyKeyboardRemove())  # Foydalanuvchi uchun bosh menyu
+
+
+
+
+# Kinolarni ro'yxatini yaratish
+def create_kino_list(kino_chunk, page_number, total_pages):
+    kinos_list = f"📋 <b>Mavjud kinolar ro‘yxati:</b>\n\n"
+
+    # Har bir kino uchun tafsilotlarni chiqarish
+    for kino in kino_chunk:
+        # Birinchi qatorni olish
+        first_line_caption = kino['caption'].splitlines()[0] if kino['caption'] else "Izoh mavjud emas"
+        kinos_list += (
+            f"🎬 <b>Kino kodi:</b> {kino['post_id']}\n"
+            f"📝 <b>Izoh:</b> {first_line_caption}\n"
+            "----------------------------------------\n"
+        )
+
+    # Sahifa raqami va jami sahifalar
+    kinos_list += f"\n📄 <b>Sahifa:</b> {page_number + 1} / {total_pages}"
+
+    return kinos_list
+
+
+@dp.message_handler(text="📋 Mavjud kinolar")
+async def list_existing_kinos(message: types.Message):
+    if message.from_user.id in ADMINS:
+        # Kino kodlarini olish
+        kinos = kino_db.get_all_kinos()
+
+        if kinos:
+            # Kinolarni bo‘lish (har 10 ta kino)
+            chunk_size = 10
+            kino_chunks = [kinos[i:i + chunk_size] for i in range(0, len(kinos), chunk_size)]
+            total_pages = len(kino_chunks)
+
+            # Inline tugmalarni yaratish
+            keyboard = InlineKeyboardMarkup(row_width=2)
+
+            # "Keyingi" tugmasi (agar bir nechta sahifa mavjud bo‘lsa)
+            if total_pages > 1:
+                next_button = InlineKeyboardButton(text="🔜 Keyingi", callback_data=f"kinos_1")
+                keyboard.add(next_button)
+
+            # "Oldingi" tugmasi (birinchi sahifa bo‘lmasa)
+            previous_button = InlineKeyboardButton(text="🔙 Oldingi", callback_data=f"kinos_0")
+            keyboard.add(previous_button)
+
+            # Birinchi ro‘yxatni yuborish
+            await message.answer(create_kino_list(kino_chunks[0], 0, total_pages), parse_mode="HTML",
+                                 reply_markup=keyboard)
+        else:
+            await message.answer("⚠️ Hozirda kino ro‘yxati mavjud emas.")
+    else:
+        await message.answer("🚫 Siz admin emassiz.")
+
+
+@dp.callback_query_handler(lambda c: c.data.startswith("kinos_"))
+async def show_kino_page(callback_query: types.CallbackQuery):
+    idx = int(callback_query.data.split("_")[1])
+    kinos = kino_db.get_all_kinos()
+
+    # Kinolarni bo‘lish (har 10 ta kino)
+    chunk_size = 10
+    kino_chunks = [kinos[i:i + chunk_size] for i in range(0, len(kinos), chunk_size)]
+    total_pages = len(kino_chunks)
+
+    # Inline tugmalarni yaratish
+    keyboard = InlineKeyboardMarkup(row_width=2)
+
+    # "Oldingi" tugmasi (agar sahifa 1 dan katta bo‘lsa)
+    if idx > 0:
+        previous_button = InlineKeyboardButton(text="🔙 Oldingi", callback_data=f"kinos_{idx - 1}")
+        keyboard.add(previous_button)
+
+    # "Keyingi" tugmasi (agar oxirgi sahifa bo‘lmasa)
+    if idx < total_pages - 1:
+        next_button = InlineKeyboardButton(text="🔜 Keyingi", callback_data=f"kinos_{idx + 1}")
+        keyboard.add(next_button)
+
+    # Yangi kinos ro‘yxatini yaratish
+    new_kino_list = create_kino_list(kino_chunks[idx], idx, total_pages)
+
+    # Xabarni tahrirlash
+    await callback_query.answer()
+    await callback_query.message.edit_text(new_kino_list, parse_mode="HTML", reply_markup=keyboard)
+
+
 
 
 
